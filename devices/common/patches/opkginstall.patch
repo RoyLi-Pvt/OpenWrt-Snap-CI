@@ -5,7 +5,7 @@
  			    inst  = packages.installed.pkgs[name];
  
 -			if (!inst || !inst.installed)
-+			if (!inst || !inst.installed || pkg.name.includes('opkg') || pkg.name.includes('luci-lib-fs') || pkg.name.includes('base-files') || pkg.name.includes('luci-base') || pkg.name.includes('busybox') || pkg.name.includes('dnsmasq-full') || pkg.name.includes('firewall') || pkg.name.includes('miniupnpd') || pkg.name.includes('coremark') || pkg.name.includes('luci-mod-network') || pkg.name.includes('luci-mod-status') || pkg.name.includes('luci-mod-system'))
++			if (!inst || !inst.installed || pkg.name.includes('opkg') || pkg.name.includes('luci-lib-fs') || pkg.name.includes('base-files') || pkg.name.includes('luci-base') || pkg.name.includes('busybox') || pkg.name.includes('nginx-') || pkg.name == "nginx" || pkg.name.includes('dnsmasq-full') || pkg.name.includes('firewall') || pkg.name.includes('miniupnpd') || pkg.name.includes('coremark') || pkg.name.includes('luci-mod-network') || pkg.name.includes('luci-mod-status') || pkg.name.includes('luci-mod-system'))
  				continue;
  
  			if (!avail || compareVersion(avail.version, pkg.version) <= 0)
@@ -150,40 +150,44 @@
  						opkg="$opkg $1"
  						shift
  					;;
-@@ -34,6 +34,15 @@ case "$action" in
- 
+@@ -35,8 +35,36 @@ case "$action" in
  			if flock -x 200; then
  				$opkg $action "$@" </dev/null >/tmp/opkg.out 2>/tmp/opkg.err
-+				if [[ $@ == luci-app-* && "$(opkg list-installed | grep luci-i18n-"$(echo $@ | cut -d - -f 3-4)"-zh-cn)"]]; then
-+					$opkg $action luci-i18n-"$(echo $@ | cut -d - -f 3-4)"-zh-cn </dev/null >>/tmp/opkg.out 2>/dev/null
-+				fi
-+				sed -i "/resolve_conffiles/d" /tmp/opkg.err || true
-+				sed -i "/uci: Entry not found/d" /tmp/opkg.err || true
-+				sed -i "/Existing conffile/d" /tmp/opkg.err || true
-+				sed -i "/Couldn't unlink/d" /tmp/opkg.err || true
-+				sed -i "/cannot find dependency kernel/d" /tmp/opkg.err || true
-+				[[ "`cat /tmp/opkg.err`" =~ "^Collected errors:(\nCollected errors:){0,}$" ]] && rm -f /tmp/opkg.err || true
  				code=$?
- 				stdout=$(cat /tmp/opkg.out)
+-				stdout=$(cat /tmp/opkg.out)
++				if [[ $@ == luci-app-* && "$(opkg list | grep luci-i18n-"$(echo $@ | cut -d - -f 3-)"-zh-cn)" ]]; then
++					$opkg $action luci-i18n-"$(echo $@ | cut -d - -f 3-)"-zh-cn </dev/null >>/tmp/opkg.out 2>/dev/null
++				fi
++				case "$action" in
++					install)
++						[ "$(opkg list-installed | cut -f 1 -d ' ' | grep -w $@)" ] && {
++							rm -f /tmp/opkg.err
++						}
++						[[ "$(opkg list-installed | cut -f 1 -d ' ' | grep -w $@)" && ! "$(cat /etc/backup/user_installed.opkg | grep -w $@)" ]] && {
++							echo $@ >>/etc/backup/user_installed.opkg
++						}
++					;;
++					upgrade)
++						[ "$(opkg list-installed | cut -f 1 -d ' ' | grep -w $@)" ] && {
++							rm -f /tmp/opkg.err
++						}
++					;;
++					remove)
++						[ ! "$(opkg list-installed | cut -f 1 -d ' ' | grep -w $@)" ] && {
++							rm -f /tmp/opkg.err
++						}
++						sed -i "/^$@$/d" /etc/backup/user_installed.opkg
++					;;
++				esac
  				stderr=$(cat /tmp/opkg.err)
-@@ -47,6 +56,17 @@ case "$action" in
- 			[ -n "$stdout" ] && json_add_string stdout "$stdout"
- 			[ -n "$stderr" ] && json_add_string stderr "$stderr"
- 			json_dump
-+
-+		case "$action" in
-+			install)
-+				[[ "$(opkg list-installed | cut -f 1 -d ' ' | grep $@)" && ! "$(cat /etc/backup/user_installed.opkg | grep ^$@$)" ]] && {
-+				echo $@ >>/etc/backup/user_installed.opkg
++				[ -n "$stderr" ] || {
++					echo "🎉 已完成, 请关闭本窗口~" >>/tmp/opkg.out
++					code=0
 +				}
-+			;;
-+			remove)
-+				sed -i "/^$@$/d" /etc/backup/user_installed.opkg
-+			;;
-+		esac
- 		) 200>/tmp/opkg.lock
- 
- 		rm -f /tmp/opkg.lock /tmp/opkg.err /tmp/opkg.out
++				stdout=$(cat /tmp/opkg.out)
+ 			else
+ 				code=255
+ 				stderr="Failed to acquire lock"
 
 --- a/package/feeds/luci/luci-app-opkg/root/usr/share/rpcd/acl.d/luci-app-opkg.json
 +++ b/package/feeds/luci/luci-app-opkg/root/usr/share/rpcd/acl.d/luci-app-opkg.json
@@ -238,3 +242,25 @@
  	return $ret
  }
  
+
+--- a/package/base-files/files/sbin/sysupgrade
++++ b/package/base-files/files/sbin/sysupgrade
+@@ -232,6 +232,7 @@ do_save_conffiles() {
+ 
+ 	if [ "$SAVE_INSTALLED_PKGS" -eq 1 ]; then
+ 		echo "${INSTALLED_PACKAGES}" >> "$CONFFILES"
++		echo "${ETCBACKUP_DIR}/user_installed.opkg" >> "$CONFFILES"
+ 		mkdir -p "$ETCBACKUP_DIR"
+ 		# Avoid touching filesystem on each backup
+ 		RAMFS="$(mktemp -d -t sysupgrade.XXXXXX)"
+
+--- a/package/feeds/luci/luci-mod-system/htdocs/luci-static/resources/view/system/flash.js
++++ b/package/feeds/luci/luci-mod-system/htdocs/luci-static/resources/view/system/flash.js
+@@ -261,6 +261,7 @@ return view.extend({
+ 					body.push(E('p', {}, E('label', { 'class': 'btn' }, [
+ 						opts.backup_pkgs[0], ' ', _('Include in backup a list of current installed packages at /etc/backup/installed_packages.txt')
+ 					])));
++					opts.backup_pkgs[0].checked = true;
+ 				};
+ 
+ 				var cntbtn = E('button', {

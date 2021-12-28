@@ -9,19 +9,19 @@ svn co https://github.com/immortalwrt/immortalwrt/branches/openwrt-21.02/target/
 rm -rf target/linux/rockchip/{.svn,patches-5.4/.svn}
 svn co https://github.com/immortalwrt/immortalwrt/branches/openwrt-21.02/target/linux/rockchip/patches-5.4 target/linux/rockchip/patches-5.4
 curl -sfL https://git.io/J0klE -o package/kernel/linux/modules/video.mk
-mkdir -p files/etc/rc.d
-curl -sfL https://git.io/J0kc3 --create-dirs -o files/usr/bin/start-rk3328-pwm-fan.sh
-curl -sfL https://git.io/J0kW8 --create-dirs -o files/etc/init.d/fa-pwmfan
-chmod +x files/usr/bin/start-rk3328-pwm-fan.sh files/etc/init.d/fa-pwmfan
+
+curl -sfL https://raw.githubusercontent.com/friendlyarm/friendlywrt/master-v21.02/target/linux/rockchip/armv8/base-files/usr/bin/fa-fancontrol.sh --create-dirs -o files/usr/bin/fa-fancontrol.sh
+curl -sfL https://raw.githubusercontent.com/friendlyarm/friendlywrt/master-v21.02/target/linux/rockchip/armv8/base-files/usr/bin/fa-fancontrol-direct.sh --create-dirs -o files/usr/bin/fa-fancontrol-direct.sh
+curl -sfL https://raw.githubusercontent.com/friendlyarm/friendlywrt/master-v21.02/target/linux/rockchip/armv8/base-files/etc/init.d/fa-fancontrol --create-dirs -o files/etc/init.d/fa-fancontrol
+chmod +x files/usr/bin/fa-*.sh files/etc/init.d/fa-fancontrol
 
 sed -i 's,-mcpu=generic,-march=armv8-a+crypto+crc -mabi=lp64,g' include/target.mk
 
 sed -i "s,'eth1' 'eth0','eth0' 'eth1',g" target/linux/rockchip/armv8/base-files/etc/board.d/02_network
 
-sed -i '/set_interface_core 4 "eth1"/a\set_interface_core 8 "ff160000" "ff160000.i2c"' target/linux/rockchip/armv8/base-files/etc/hotplug.d/net/40-net-smp-affinity
-sed -i '/set_interface_core 4 "eth1"/a\set_interface_core 1 "ff150000" "ff150000.i2c"' target/linux/rockchip/armv8/base-files/etc/hotplug.d/net/40-net-smp-affinity
-
 sed -i '/;;/i\ethtool -K eth1 rx off tx off && logger -t disable-offloading "disabed rk3328 ethernet tcp/udp offloading tx/rx"' target/linux/rockchip/armv8/base-files/etc/hotplug.d/net/40-net-smp-affinity
+
+sed -i 's,kmod-usb-net-rtl8152$,usb-net-rtl8152-vendor,g' target/linux/rockchip/image/armv8.mk
 
 echo '
 CONFIG_ARM64_CRYPTO=y
@@ -45,5 +45,3 @@ CONFIG_CPU_FREQ_GOV_USERSPACE=y
 CONFIG_CPU_FREQ_GOV_ONDEMAND=y
 CONFIG_CPU_FREQ_GOV_CONSERVATIVE=y
 ' >> ./target/linux/rockchip/armv8/config-5.4
-
-

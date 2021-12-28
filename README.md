@@ -30,9 +30,13 @@
 
 + 后台一键OTA更新固件,省去了每次固件升级都需要找固件,下载固件,上传固件等繁琐操作.
 
-+ 替换 Uhttpd 为 Nginx, 支持 反向代理; WebDAV等诸多玩法.
++ 后台一键设置旁路由,一键开关IPv6.
+
++ 支持在线安装Kmod内核模块.
 
 + 重构版SSR-PLUS,国内外智能DNS解析,支持DOH,Trojan-Go等
+
++ 替换 Uhttpd 为 Nginx, 支持 反向代理; WebDAV等诸多玩法.
 
 + 性能,友好度,易用性,插件,以及针对国内特殊环境等的自定义优化, 开箱即用
 
@@ -61,8 +65,8 @@
 + pve/ 可打开 Proxmox VE虚拟机管理 默认为 10.0.0.10:8006
 + by/ 可打开 Bypass插件页面 即 ip/luci/admin/services/bypass
 + pk/ 可打开 Packages插件管理页面 即 ip/luci/admin/system/opkg
++ ag/ 可打开 Aria2 Web面板 即 ip/ariang
 + ug/ 可打开 固件在线更新页面 即 ip/luci/admin/services/gpsysupgrade
-+ dl/ 可打开 固件和插件ipk仓库
 ##### 可自行在 /etc/nginx/conf.d/shortcuts.conf 中调整和添加更多快捷访问
 
 第一次使用请采用全新安装,避免出现升级失败以及其他一些可能的Bug.

@@ -64,8 +64,14 @@ jobs:
         echo "UPLOAD_FIRMWARE_TO_WETRANSFER=${UPLOAD_FIRMWARE_TO_WETRANSFER}" >> $GITHUB_ENV
         if [ ${{matrix.target}} == "x86_64" ]; then
             echo "ARCH=linux/amd64" >> $GITHUB_ENV
+            echo "MTARGET=x86_64" >> $GITHUB_ENV
         elif [[ ${{matrix.target}} =~ (Rpi-4B|nanopi-r2s|nanopi-r4s) ]]; then
             echo "ARCH=linux/arm64" >> $GITHUB_ENV
+        fi
+        if [ ${{matrix.target}} == "Rpi-4B" ]; then
+            echo "MTARGET=aarch64_cortex-a72" >> $GITHUB_ENV
+        elif [ ${{matrix.target}} == "nanopi-r2s" ]; then
+            echo "MTARGET=aarch64_generic" >> $GITHUB_ENV
         fi
 
     - name: Trigger Packages Update
@@ -85,7 +91,7 @@ jobs:
         DEBIAN_FRONTEND: noninteractive
       run: |
         ( sudo -E apt-get -qq update
-        sudo -E apt-get -qq install build-essential asciidoc binutils bzip2 gawk gettext git libncurses5-dev libz-dev patch python3 python2.7 unzip zlib1g-dev lib32gcc1 libc6-dev-i386 subversion flex uglifyjs gcc-multilib g++-multilib p7zip p7zip-full msmtp libssl-dev texinfo libglib2.0-dev xmlto qemu-utils upx-ucl libelf-dev autoconf automake libtool autopoint device-tree-compiler ccache xsltproc rename antlr3 gperf wget curl swig rsync
+        sudo -E apt-get -qq install build-essential asciidoc binutils bzip2 gawk gettext git libncurses5-dev patch python3 python2.7 unzip zlib1g-dev lib32gcc-s1 libc6-dev-i386 subversion flex uglifyjs gcc-multilib g++-multilib p7zip p7zip-full msmtp libssl-dev texinfo libglib2.0-dev xmlto qemu-utils upx-ucl libelf-dev autoconf automake libtool autopoint device-tree-compiler ccache xsltproc rename antlr3 gperf wget curl swig rsync
         sudo -E apt-get -qq purge azure-cli ghc* zulu* hhvm llvm* firefox powershell openjdk* dotnet* google* mysql* php* android*
         sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
         sudo -E apt-get -qq autoremove --purge
@@ -109,13 +115,13 @@ jobs:
         git clone --depth 1 $REPO_URL -b v$REPO_BRANCH openwrt
         cd openwrt
         if [[ ${{matrix.target}} == "x86_64" ]]; then
-            curl -fL -o sdk.tar.xz https://downloads.openwrt.org/releases/$REPO_BRANCH/targets/x86/64/openwrt-sdk-$REPO_BRANCH-x86-64_gcc-8.4.0_musl.Linux-x86_64.tar.xz || curl -fL -o sdk.tar.xz https://downloads.openwrt.org/releases/21.02-SNAPSHOT/targets/x86/64/openwrt-sdk-21.02-SNAPSHOT-x86-64_gcc-8.4.0_musl.Linux-x86_64.tar.xz
+            curl -fL -m 60 -o sdk.tar.xz https://downloads.openwrt.org/releases/$REPO_BRANCH/targets/x86/64/openwrt-sdk-$REPO_BRANCH-x86-64_gcc-8.4.0_musl.Linux-x86_64.tar.xz || curl -fL -m 60 -o sdk.tar.xz https://openwrt.tetaneutral.net/releases/21.02-SNAPSHOT/targets/x86/64/openwrt-sdk-21.02-SNAPSHOT-x86-64_gcc-8.4.0_musl.Linux-x86_64.tar.xz
         elif [[ ${{matrix.target}} == nanopi* ]]; then
-            curl -fL -o sdk.tar.xz https://downloads.openwrt.org/releases/$REPO_BRANCH/targets/rockchip/armv8/openwrt-sdk-$REPO_BRANCH-rockchip-armv8_gcc-8.4.0_musl.Linux-x86_64.tar.xz || curl -fL -o sdk.tar.xz https://downloads.openwrt.org/releases/21.02-SNAPSHOT/targets/rockchip/armv8/openwrt-sdk-21.02-SNAPSHOT-rockchip-armv8_gcc-8.4.0_musl.Linux-x86_64.tar.xz
+            curl -fL -m 60 -o sdk.tar.xz https://downloads.openwrt.org/releases/$REPO_BRANCH/targets/rockchip/armv8/openwrt-sdk-$REPO_BRANCH-rockchip-armv8_gcc-8.4.0_musl.Linux-x86_64.tar.xz || curl -fL -m 60 -o sdk.tar.xz https://openwrt.tetaneutral.net/releases/21.02-SNAPSHOT/targets/rockchip/armv8/openwrt-sdk-21.02-SNAPSHOT-rockchip-armv8_gcc-8.4.0_musl.Linux-x86_64.tar.xz
         elif [[ ${{matrix.target}} =~ "Rpi-4B" ]]; then
-            curl -fL -o sdk.tar.xz https://downloads.openwrt.org/releases/$REPO_BRANCH/targets/bcm27xx/bcm2711/openwrt-sdk-$REPO_BRANCH-bcm27xx-bcm2711_gcc-8.4.0_musl.Linux-x86_64.tar.xz || curl -fL -o sdk.tar.xz https://downloads.openwrt.org/releases/21.02-SNAPSHOT/targets/bcm27xx/bcm2711/openwrt-sdk-21.02-SNAPSHOT-bcm27xx-bcm2711_gcc-8.4.0_musl.Linux-x86_64.tar.xz
+            curl -fL -m 60 -o sdk.tar.xz https://downloads.openwrt.org/releases/$REPO_BRANCH/targets/bcm27xx/bcm2711/openwrt-sdk-$REPO_BRANCH-bcm27xx-bcm2711_gcc-8.4.0_musl.Linux-x86_64.tar.xz || curl -fL -m 60 -o sdk.tar.xz https://openwrt.tetaneutral.net/releases/21.02-SNAPSHOT/targets/bcm27xx/bcm2711/openwrt-sdk-21.02-SNAPSHOT-bcm27xx-bcm2711_gcc-8.4.0_musl.Linux-x86_64.tar.xz
         fi
-        echo "REPO_BRANCH=v$REPO_BRANCH" >> $GITHUB_ENV
+        echo "REPO_BRANCH=$REPO_BRANCH" >> $GITHUB_ENV
         
     - name: Free up disk space
       if: env.FREE_UP_DISK == 'true'
@@ -127,7 +133,6 @@ jobs:
         ln -sf /mnt/openwrt/staging_dir openwrt/staging_dir
         ln -sf /mnt/openwrt/build_dir/hostpkg openwrt/build_dir/hostpkg
         
-
     - name: Load custom configuration
       run: |
         cp -rf devices/common/. openwrt/
@@ -210,13 +215,14 @@ jobs:
         mv -f openwrt/bin/targets/*/*/{*combined*,*sysupgrade*} ./firmware/ 2>/dev/null || true
         cp openwrt/.config  ./firmware/${{matrix.target}}.config
         cp openwrt/build_dir/target-*/linux-*/linux-*/.config ./firmware/${{matrix.target}}_kernel.config
+        mv -f openwrt/bin/targets/*/*/packages ./kmods
         cd firmware
         echo "${{ env.VERSION }}.$(date +'%Y')" > version.txt
-        rename -v "s/^openwrt/${{ env.VERSION }}-openwrt/" *
-        rename -v "s/friendlyarm_//" *gz
+        rename -v "s/^openwrt/${{ env.VERSION }}-openwrt/" * || true
+        rename -v "s/friendlyarm_//" *gz || true
         md5=$((md5sum *squashfs-sysupgrade* || md5sum *squashfs-combined-efi*) | awk '{print $1}') 2>/dev/null
         echo $md5 >> version.txt
-        echo $REPO_BRANCH >> version.txt
+        echo v$REPO_BRANCH >> version.txt
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         Emoji=("🎉" "🤞" "✨" "🎁" "🎈" "🎄" "🎨" "💋" "🍓" "🍕" "🍉" "💐" "🌴" "🚀" "🛸" "🗽" "⛅" "🌈" "🔥" "⛄" "🐶" "🏅" "🦄" "🐤")
         echo "EMOJI=${Emoji[$[$RANDOM % ${#Emoji[@]}]]}" >> $GITHUB_ENV
