@@ -20,6 +20,10 @@ on:
         description: 'Skip version check'
         required: false
         default: 'true'
+      version:
+        description: 'Version'
+        required: false
+        default: ''
 
 env:
   REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
@@ -54,6 +58,5 @@ jobs:
           -X POST https://api.github.com/repos/${{ github.repository }}/dispatches \
           -H "Accept: application/vnd.github.everest-preview+json" \
           -H "Authorization: token ${{ secrets.REPO_TOKEN }}" \
-          -d '{"event_type": "x86_64 ${{ env.SSH }}", "client_payload": {"target": "x86_64"}}'
-          
+          -d '{"event_type": "x86_64 ${{ github.event.inputs.version }}", "client_payload": {"target": "x86_64"}}'
 
