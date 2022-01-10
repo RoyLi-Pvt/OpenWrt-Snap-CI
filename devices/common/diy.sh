@@ -1,9 +1,9 @@
 #!/bin/bash
 #=================================================
 shopt -s extglob
-kernel-version="$(curl -sfL https://github.com/openwrt/openwrt/commits/master/include/kernel-version.mk | grep -o 'href=".*>kernel: bump 5.10' | head -1 | cut -d / -f 5 | cut -d "#" -f 1)"
+kernel_version="$(curl -sfL https://github.com/openwrt/openwrt/commits/master/include/kernel-version.mk | grep -o 'href=".*>kernel: bump 5.10' | head -1 | cut -d / -f 5 | cut -d "#" -f 1)"
 version="$(git rev-parse HEAD)"
-git checkout $kernel-version
+git checkout $kernel_version
 git checkout HEAD^
 mv -f target/linux package/kernel include/kernel-version.mk include/kernel-defaults.mk .github/
 git checkout $version
