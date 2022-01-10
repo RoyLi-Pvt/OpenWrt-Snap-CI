@@ -29,7 +29,7 @@ svn export --force https://github.com/immortalwrt/immortalwrt/branches/openwrt-2
 svn export --force https://github.com/coolsnowwolf/lede/trunk/tools/upx tools/upx
 svn export --force https://github.com/coolsnowwolf/lede/trunk/tools/ucl tools/ucl
 svn co https://github.com/coolsnowwolf/lede/trunk/target/linux/generic/hack-5.10 target/linux/generic/hack-5.10
-rm -rf target/linux/generic/hack-5.10/220-gc_sections*
+rm -rf target/linux/generic/hack-5.10/{220-gc_sections*,781-dsa-register*}
 curl -sfL https://git.io/J0klM --create-dirs -o package/network/config/firewall/patches/fullconenat.patch
 ) &
 
