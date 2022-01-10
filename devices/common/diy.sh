@@ -29,7 +29,7 @@ svn export --force https://github.com/immortalwrt/immortalwrt/branches/master/pa
 svn export --force https://github.com/coolsnowwolf/lede/trunk/tools/upx tools/upx
 svn export --force https://github.com/coolsnowwolf/lede/trunk/tools/ucl tools/ucl
 svn co https://github.com/immortalwrt/immortalwrt/branches/master/target/linux/generic/hack-5.10 target/linux/generic/hack-5.10
-rm -rf target/linux/generic/hack-5.10/721-net-phy-aquantia-enable-AQR112 target/linux/generic/hack-5.10/723-net-phy-aquantia-add-PHY
+rm -rf target/linux/generic/hack-5.10/721-net-phy-aquantia-enable-AQR112* target/linux/generic/hack-5.10/723-net-phy-aquantia-add-PHY*
 curl -sfL https://git.io/J0klM --create-dirs -o package/network/config/firewall/patches/fullconenat.patch
 curl -sfL https://raw.githubusercontent.com/coolsnowwolf/lede/master/target/linux/generic/hack-5.10/601-netfilter-export-udp_get_timeouts-function.patch -o target/linux/generic/hack-5.10/601-netfilter-export-udp_get_timeouts-function.patch
 ) &
