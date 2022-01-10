@@ -198,7 +198,6 @@ test $version -lt 1 && {
 SYSCTL_LOCAL=/etc/sysctl.d/50-local.conf
 mkdir -p /etc/sysctl.d
 echo -n >$SYSCTL_LOCAL
-echo net.ipv4.tcp_congestion_control="bbr" >>$SYSCTL_LOCAL
 echo net.nf_conntrack_max=$nf_conntrack_max >>$SYSCTL_LOCAL
 echo net.ipv4.ip_early_demux=0 >>$SYSCTL_LOCAL
 echo net.bridge.bridge-nf-call-iptables=0 >>$SYSCTL_LOCAL
