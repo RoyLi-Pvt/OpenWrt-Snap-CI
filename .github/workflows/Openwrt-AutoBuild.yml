@@ -122,6 +122,8 @@ jobs:
             curl -fL -m 60 -o sdk.tar.xz https://downloads.openwrt.org/releases/$REPO_BRANCH/targets/bcm27xx/bcm2711/openwrt-sdk-$REPO_BRANCH-bcm27xx-bcm2711_gcc-8.4.0_musl.Linux-x86_64.tar.xz || curl -fL -m 60 -o sdk.tar.xz https://openwrt.tetaneutral.net/releases/21.02-SNAPSHOT/targets/bcm27xx/bcm2711/openwrt-sdk-21.02-SNAPSHOT-bcm27xx-bcm2711_gcc-8.4.0_musl.Linux-x86_64.tar.xz
         fi
         echo "REPO_BRANCH=$REPO_BRANCH" >> $GITHUB_ENV
+        kernel_v="$(cat openwrt/include/kernel-version.mk | grep LINUX_KERNEL_HASH-5.10* | cut -f 2 -d - | cut -f 1 -d ' ')"
+        echo "KERNEL_V=$kernel_v" >> $GITHUB_ENV
         
     - name: Free up disk space
       if: env.FREE_UP_DISK == 'true'
@@ -211,11 +213,11 @@ jobs:
     - name: Organize files
       id: organize
       run: |
-        mkdir firmware
+        mkdir firmware kmods
         mv -f openwrt/bin/targets/*/*/{*combined*,*sysupgrade*} ./firmware/ 2>/dev/null || true
         cp openwrt/.config  ./firmware/${{matrix.target}}.config
         cp openwrt/build_dir/target-*/linux-*/linux-*/.config ./firmware/${{matrix.target}}_kernel.config
-        mv -f openwrt/bin/targets/*/*/packages ./kmods
+        mv -f openwrt/bin/targets/*/*/packages ./kmods/${{ env.KERNEL_V }}
         cd firmware
         echo "${{ env.VERSION }}.$(date +'%Y')" > version.txt
         rename -v "s/^openwrt/${{ env.VERSION }}-openwrt/" * || true
@@ -242,15 +244,6 @@ jobs:
         REMOTE_USER: root
         TARGET: "/www/wwwroot/op.supes.top/firmware/${{matrix.target}}/"
 
-    - name: remote ssh command
-      uses: appleboy/ssh-action@master
-      if: env.SSH_PRIVATE_KEY && ! contains(github.event.action, 'noser') && env.MTARGET
-      with:
-        host: op.supes.top
-        username: root
-        key: ${{ env.SSH_PRIVATE_KEY }}
-        script: mkdir -p /www/wwwroot/op.supes.top/packages/${{ env.MTARGET }}/kmods/${{ env.REPO_BRANCH }}
-
     - name: Deploy kmods to server
       uses: easingthemes/ssh-deploy@main
       if: env.SSH_PRIVATE_KEY && ! contains(github.event.action, 'noser') && env.MTARGET
@@ -260,7 +253,7 @@ jobs:
         SOURCE: kmods/
         REMOTE_HOST: op.supes.top
         REMOTE_USER: root
-        TARGET: "/www/wwwroot/op.supes.top/packages/${{ env.MTARGET }}/kmods/${{ env.REPO_BRANCH }}/"
+        TARGET: "/www/wwwroot/op.supes.top/packages/${{ env.MTARGET }}/kmods/"
 
     - name: Upload firmware for artifact
       uses: actions/upload-artifact@main
