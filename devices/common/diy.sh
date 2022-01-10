@@ -24,8 +24,8 @@ sed -i '$a src-git kiddin9 https://github.com/kiddin9/openwrt-packages.git;maste
 cd feeds/kiddin9; git pull; cd -
 
 (
-svn export --force https://github.com/immortalwrt/immortalwrt/branches/master/package/network/services/ppp package/network/services/ppp
-svn export --force https://github.com/immortalwrt/immortalwrt/branches/master/package/network/services/dnsmasq package/network/services/dnsmasq
+svn export --force https://github.com/immortalwrt/immortalwrt/branches/openwrt-21.02/package/network/services/ppp package/network/services/ppp
+svn export --force https://github.com/immortalwrt/immortalwrt/branches/openwrt-21.02/package/network/services/dnsmasq package/network/services/dnsmasq
 svn export --force https://github.com/coolsnowwolf/lede/trunk/tools/upx tools/upx
 svn export --force https://github.com/coolsnowwolf/lede/trunk/tools/ucl tools/ucl
 svn co https://github.com/coolsnowwolf/lede/trunk/target/linux/generic/hack-5.10 target/linux/generic/hack-5.10
