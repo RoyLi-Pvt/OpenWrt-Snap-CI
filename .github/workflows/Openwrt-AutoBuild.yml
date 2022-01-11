@@ -211,11 +211,12 @@ jobs:
     - name: Organize files
       id: organize
       run: |
-        mkdir firmware
+        mkdir firmware kmods
         mv -f openwrt/bin/targets/*/*/{*combined*,*sysupgrade*} ./firmware/ 2>/dev/null || true
         cp openwrt/.config  ./firmware/${{matrix.target}}.config
         cp openwrt/build_dir/target-*/linux-*/linux-*/.config ./firmware/${{matrix.target}}_kernel.config
-        mv -f openwrt/bin/targets/*/*/packages ./kmods
+        kernel_v="$(cat openwrt/include/kernel-version.mk | grep LINUX_KERNEL_HASH-5.10* | cut -f 2 -d - | cut -f 1 -d ' ')"
+        mv -f openwrt/bin/targets/*/*/packages ./kmods/$kernel_v
         cd firmware
         echo "${{ env.VERSION }}.$(date +'%Y')" > version.txt
         rename -v "s/^openwrt/${{ env.VERSION }}-openwrt/" * || true
