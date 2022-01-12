@@ -195,6 +195,7 @@ jobs:
       run: |
         cd openwrt
         echo -e "$(($(nproc)+1)) thread compile"
+        make distclean
         make -j$(($(nproc)+1)) || make -j1 V=s
         echo "::set-output name=status::success"
    
