@@ -74,3 +74,4 @@ jobs:
               -d '{"event_type": "x86_64", "client_payload": {"target": "x86_64"}}'
             fi
         fi
+
