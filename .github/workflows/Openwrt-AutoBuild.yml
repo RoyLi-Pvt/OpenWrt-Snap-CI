@@ -187,7 +187,7 @@ jobs:
       uses: klever1988/cachewrtbuild@main
       if: contains(github.event.action, 'nocache') == false
       with:
-        ccache: 'true'
+        ccache: 'false'
         prefix: ${{ github.workspace }}/openwrt
 
     - name: Compile the firmware
@@ -195,7 +195,6 @@ jobs:
       run: |
         cd openwrt
         echo -e "$(($(nproc)+1)) thread compile"
-        make distclean
         make -j$(($(nproc)+1)) || make -j1 V=s
         echo "::set-output name=status::success"
    
