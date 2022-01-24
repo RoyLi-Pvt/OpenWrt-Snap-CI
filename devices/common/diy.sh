@@ -5,15 +5,24 @@ commitid="$(curl -sfL https://github.com/openwrt/openwrt/commits/master/include 
 version="$(git rev-parse HEAD)"
 git checkout $commitid
 git checkout HEAD^
-kernel_v="$(cat openwrt/include/kernel-5.10 | grep LINUX_KERNEL_HASH-5.10* | cut -f 2 -d - | cut -f 1 -d ' ')"
-[ "$kernel_v" ] && sed -i "/^KERNEL_V=/c\KERNEL_V=$kernel_v" devices/common/default-settings
-mv -f target/linux package/kernel include/kernel-5.10 include/kernel-defaults.mk .github/
+[ "$(echo $(git log -1 --pretty=short) | grep "kernel: bump 5.10")" ] && git checkout $commitid
+kernel_v="$(cat include/kernel-5.10 | grep LINUX_KERNEL_HASH-5.10* | cut -f 2 -d - | cut -f 1 -d ' ')"
+sed -i "s?targets/%S/packages?packages/%A/kmods/$kernel_v?" include/feeds.mk
+mv -f target/linux package/kernel include/kernel-version.mk include/kernel-5.10 include/kernel-defaults.mk .github/
 git checkout $version
-rm -rf target/linux package/kernel include/kernel-5.10 include/kernel-defaults.mk
+echo "$(date +"%s")" >version.date
+rm -rf target/linux package/kernel include/kernel-version.mk include/kernel-5.10 include/kernel-defaults.mk
 mv -f .github/linux target/
 mv -f .github/kernel package/
-mv -f .github/kernel-5.10 .github/kernel-defaults.mk include/
+mv -f  .github/kernel-version.mk .github/kernel-5.10 .github/kernel-defaults.mk include/
 sed -i 's/ libelf//' tools/Makefile
+
+sed -i "s/DEFAULT_PACKAGES:=/DEFAULT_PACKAGES:=luci-app-advanced luci-app-firewall luci-app-gpsysupgrade luci-app-opkg luci-app-bypass luci-app-upnp luci-app-autoreboot \
+luci-app-wizard luci-app-nginx-manager luci-app-attendedsysupgrade luci-theme-edge luci-theme-bootstrap dnsmasq-full luci-ssl-nginx luci-base luci-compat luci-lib-ipkg \
+coremark my-default-settings wget-ssl curl htop nano iptables-mod-fullconenat zram-swap kmod-lib-zstd kmod-ipt-offload kmod-tcp-bbr bash \
+wpad-basic-wolfssl kmod-usb2 kmod-usb3 automount /" include/target.mk
+sed -i "/dnsmasq \\\/d" include/target.mk
+sed -i 's/DEFAULT_PACKAGES +=/DEFAULT_PACKAGES += my-autocore-arm luci-app-cpufreq kmod-hwmon-pwmfan/' target/linux/rockchip/Makefile
 
 sed -i '/	refresh_config();/d' scripts/feeds
 [ ! -f feeds.conf ] && {
@@ -39,6 +48,7 @@ sed -i 's?zstd$?zstd ucl upx\n$(curdir)/upx/compile := $(curdir)/ucl/compile?g' 
 sed -i 's/\/cgi-bin\/\(luci\|cgi-\)/\/\1/g' `find package/feeds/kiddin9/luci-*/ -name "*.lua" -or -name "*.htm*" -or -name "*.js"` &
 sed -i 's/Os/O2/g' include/target.mk
 sed -i 's/$(TARGET_DIR)) install/$(TARGET_DIR)) install --force-overwrite/' package/Makefile
+sed -i 's/install $(BUILD_PACKAGES)/install --force-overwrite --force-checksum --force-depends $(BUILD_PACKAGES)/' target/imagebuilder/files/Makefile
 sed -i "/mediaurlbase/d" package/feeds/*/luci-theme*/root/etc/uci-defaults/*
 sed -i '/root:/c\root:$1$tTPCBw1t$ldzfp37h5lSpO9VXk4uUE\/:18336:0:99999:7:::' package/base-files/files/etc/shadow
 sed -i 's/=bbr/=cubic/' package/kernel/linux/files/sysctl-tcp-bbr.conf
@@ -57,8 +67,8 @@ sed -i 's/max_requests 3/max_requests 20/g' package/network/services/uhttpd/file
 sed -i 's?admin/status/channel_analysis??' package/feeds/luci/luci-mod-status/root/usr/share/luci/menu.d/luci-mod-status.json
 sed -i "s/tty1::askfirst/tty1::respawn/g" target/linux/*/base-files/etc/inittab
 date=`date +%m.%d.%Y`
-sed -i "/DISTRIB_DESCRIPTION/c\DISTRIB_DESCRIPTION=\"%D %C by RoyLi\"" package/base-files/files/etc/openwrt_release
-sed -i "/CONFIG_VERSION_CODE=/c\CONFIG_VERSION_CODE=\"$date\"" devices/common/.config
+sed -i -e "/# REVISION:=/c\REVISION:=$date" -e '/VERSION_CODE:=/c\VERSION_CODE:=$(REVISION)' include/version.mk
+sed -i "/DISTRIB_DESCRIPTION/c\DISTRIB_DESCRIPTION=\"%D %C by RoyLi'\"" package/base-files/files/etc/openwrt_release
 sed -i '$a cgi-timeout = 300' package/feeds/packages/uwsgi/files-luci-support/luci-*.ini
 sed -i '/limit-as/c\limit-as = 5000' package/feeds/packages/uwsgi/files-luci-support/luci-webui.ini
 sed -i "s/^.*vermagic$/\techo '1' > \$(LINUX_DIR)\/.vermagic/" include/kernel-defaults.mk
