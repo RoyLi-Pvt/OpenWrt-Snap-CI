@@ -147,11 +147,10 @@ jobs:
           chmod +x devices/${{matrix.target}}/$DIY_SH
           /bin/bash "devices/${{matrix.target}}/$DIY_SH"
         fi
-        cp -Rf ./diy/* ./
-        cp -f devices/common/default-settings package/*/*/my-default-settings/files/uci.defaults
+        cp -Rf ./diy/* ./ || true
         if [ -f "devices/${{matrix.target}}/default-settings" ]; then
-          echo >> package/*/*/my-default-settings/files/uci.defaults
-          cat devices/${{matrix.target}}/default-settings >> package/*/*/my-default-settings/files/uci.defaults
+          echo >> package/*/*/my-default-settings/files/etc/uci-defaults/99-default-settings
+          cat devices/${{matrix.target}}/default-settings >> package/*/*/my-default-settings/files/etc/uci-defaults/99-default-settings
         fi
         cp -f devices/common/$CONFIG_FILE .config
         if [ -f "devices/${{matrix.target}}/$CONFIG_FILE" ]; then
@@ -170,9 +169,9 @@ jobs:
     - name: Default PPPOE Setting
       if: env.PPPOE_USERNAME && env.PPPOE_PASSWD
       run: |
-        sed -i '$i uci set network.wan.username=${{ env.PPPOE_USERNAME }}' openwrt/package/*/*/my-default-settings/files/uci.defaults
-        sed -i '$i uci set network.wan.password=${{ env.PPPOE_PASSWD }}' openwrt/package/*/*/my-default-settings/files/uci.defaults
-        sed -i '$i uci commit network' openwrt/package/*/*/my-default-settings/files/uci.defaults
+        sed -i '$i uci set network.wan.username=${{ env.PPPOE_USERNAME }}' openwrt/package/*/*/my-default-settings/files/etc/uci-defaults/95-default-settings
+        sed -i '$i uci set network.wan.password=${{ env.PPPOE_PASSWD }}' openwrt/package/*/*/my-default-settings/files/etc/uci-defaults/95-default-settings
+        sed -i '$i uci commit network' openwrt/package/*/*/my-default-settings/files/etc/uci-defaults/95-default-settings
               
     - name: SSH connection to Actions
       uses: kiddin9/debugger-action@master
@@ -182,6 +181,10 @@ jobs:
       id: package
       run: |
         cd openwrt
+        make defconfig
+        for i in $(make --file=preset_pkg.mk presetpkg); do
+          sed -i "\$a CONFIG_PACKAGE_$i=y" .config
+        done
         make defconfig
         make download -j$(($(nproc)+1)) &
 
@@ -202,46 +205,56 @@ jobs:
         mv -f .config ${{matrix.target}}.config
         if [ "${{matrix.target}}" == "nanopi-r2s" ]; then
             echo "开始编译R2C"
+            cp -f devices/common/$CONFIG_FILE .config
+            echo >> .config
             cat devices/nanopi-r2c/$CONFIG_FILE >> .config
             make defconfig
-            make -j$(($(nproc)+1)) || make -j1 V=s || (echo "R2C编译失败" && exit 0;)
+            make -j$(($(nproc)+1)) || make -j1 V=s || {
+            echo "R2C编译失败";
+            exit 1;
+            }
             mv -f .config nanopi-r2c.config
             echo "开始编译R4S"
+            cp -f devices/common/$CONFIG_FILE .config
+            echo >> .config
             cat devices/nanopi-r4s/$CONFIG_FILE >> .config
             make defconfig
-            make -j$(($(nproc)+1)) || make -j1 V=s || (echo "R4S编译失败" && exit 0;)
+            make -j$(($(nproc)+1)) || make -j1 V=s || {
+            echo "R4S编译失败";
+            exit 1;
+            }
             mv -f .config nanopi-r4s.config
-            rm -rf bin/targets/*/*/packages/*.ipk
         fi
    
     - name: Check space usage
       run: df -hT
 
-    - name: Deploy imagebuilder to server
-      uses: easingthemes/ssh-deploy@main
-      if: env.SSH_PRIVATE_KEY && ! contains(github.event.action, 'noser') && env.MTARGET
-      with:
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        ARGS: "-avzr"
-        SOURCE: openwrt/bin/targets
-        REMOTE_HOST: op.supes.top
-        REMOTE_USER: root
-        TARGET: "/www/wwwroot/op.supes.top/releases/${{ env.REPO_BRANCH }}/"
-
     - name: Organize files
       id: organize
       run: |
-        mkdir -p firmware/${{matrix.target}} firmware/nanopi-r4s firmware/nanopi-r2c kmods
+        shopt -s extglob
+        mkdir -p firmware/${{matrix.target}} kmods
+        if [[ ${{matrix.target}} == "nanopi-r4s" || ${{matrix.target}} == "nanopi-r2c" ]]; then
+          rm -rf openwrt/bin/targets/*/*/!(*.gz)
+        fi
+        if [ -f openwrt/bin/targets/*/*/*r2s*sysupgrade* ]; then
+          mkdir firmware/nanopi-r4s
+          mv -f  openwrt/nanopi-r4s.config firmware/nanopi-r4s/ || true
+          cp -rf openwrt/bin/targets/*/*/*r4s*sysupgrade* ./firmware/nanopi-r4s/ || true
+          mkdir firmware/nanopi-r2c
+          mv -f  openwrt/nanopi-r2c.config firmware/nanopi-r2c/ || true
+          cp -rf openwrt/bin/targets/*/*/*r2c*sysupgrade* ./firmware/nanopi-r2c/ || true
+          cp -rf openwrt/bin/targets/*/*/*{combined,r2s*sysupgrade,rpi-4*sysupgrade}* ./firmware/${{matrix.target}}/ || true
+        else
+          cp -rf openwrt/bin/targets/*/*/*{combined,sysupgrade}* ./firmware/${{matrix.target}}/ || true
+        fi
         cp openwrt/${{matrix.target}}.config  ./firmware/${{matrix.target}}/${{matrix.target}}.config || true
-        cp openwrt/nanopi-r2c.config firmware/nanopi-r2c/nanopi-r2c.config || true
-        cp openwrt/nanopi-r4s.config firmware/nanopi-r4s/nanopi-r4s.config || true
         cp openwrt/build_dir/target-*/linux-*/linux-*/.config ./firmware/${{matrix.target}}/${{matrix.target}}_kernel.config
         kernel_v="$(cat openwrt/include/kernel-5.10 | grep LINUX_KERNEL_HASH-5.10* | cut -f 2 -d - | cut -f 1 -d ' ')"
-        cp -rf openwrt/bin/targets/*/*/packages ./kmods/$kernel_v
+        cp -rf openwrt/bin/targets/*/*/packages ./kmods/$kernel_v || true
+        cp -rf openwrt/bin/packages/*/base/*-firmware* ./kmods/$kernel_v || true
         rm -rf openwrt/bin/targets/*/*/packages/*.ipk
-        cp -rf openwrt/bin/targets/*/*/*r4s*sysupgrade* ./firmware/nanopi-r4s/ || true
-        cp -rf openwrt/bin/targets/*/*/*r2c*sysupgrade* ./firmware/nanopi-r2c/ || true
-        cp -rf openwrt/bin/targets/*/*/*{combined,sysupgrade}* ./firmware/${{matrix.target}}/ || true
+        cp -rf openwrt/bin/targets/*/*/*{combined,r2s*sysupgrade,rpi-4*sysupgrade}* ./firmware/${{matrix.target}}/ || true
         rename -v "s/openwrt-/${{ env.VERSION }}-openwrt-/" ./firmware/*/* || true
         rename -v "s/friendlyarm_//" ./firmware/*/*gz || true
         for i in $(ls -d firmware/*/); do
@@ -250,7 +263,9 @@ jobs:
           echo $md5 >> $i/version.txt
           echo v$REPO_BRANCH >> $i/version.txt
         done
-        [ "${{matrix.target}}" == "nanopi-r2s" ] && rm -rf openwrt/bin/targets/*/*/*{r2c,r4s}*
+        rm -rf openwrt/bin/targets/*/*/!(*.tar.*|*buildinfo|packages)
+        mkdir ${{ env.REPO_BRANCH }}
+        cp -rf openwrt/bin/targets ${{ env.REPO_BRANCH }}/
         Emoji=("🎉" "🤞" "✨" "🎁" "🎈" "🎄" "🎨" "💋" "🍓" "🍕" "🍉" "💐" "🌴" "🚀" "🛸" "🗽" "⛅" "🌈" "🔥" "⛄" "🐶" "🏅" "🦄" "🐤")
         echo "EMOJI=${Emoji[$[$RANDOM % ${#Emoji[@]}]]}" >> $GITHUB_ENV
         if [ ${{matrix.target}} == "x86_64" ]; then
@@ -258,14 +273,126 @@ jobs:
         echo "NOTICE=请分配不少于1G的存储容量" >> $GITHUB_ENV
         fi
 
+    - name: Deploy firmware to server
+      uses: easingthemes/ssh-deploy@main
+      if: env.SSH_PRIVATE_KEY && contains(github.event.action, 'toser')
+      with:
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        ARGS: "-avzr --exclude="
+        SOURCE: firmware/
+        REMOTE_HOST: op.supes.top
+        REMOTE_USER: root
+        TARGET: "/www/wwwroot/op.supes.top/firmware/"
+
+    - name: Deploy kmods to server
+      uses: easingthemes/ssh-deploy@main
+      if: env.SSH_PRIVATE_KEY && ! contains(github.event.action, 'noser') && env.MTARGET
+      with:
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        ARGS: "-avzr"
+        SOURCE: kmods/
+        REMOTE_HOST: op.supes.top
+        REMOTE_USER: root
+        TARGET: "/www/wwwroot/op.supes.top/packages/${{ env.MTARGET }}/kmods/"
+
+    - name: Deploy imagebuilder to server
+      uses: easingthemes/ssh-deploy@main
+      if: env.SSH_PRIVATE_KEY && ! contains(github.event.action, 'noser')
+      with:
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        ARGS: "-avzr"
+        SOURCE: ${{ env.REPO_BRANCH }}
+        REMOTE_HOST: op.supes.top
+        REMOTE_USER: root
+        TARGET: "/www/wwwroot/op.supes.top/releases/"
+
+    - name: remote ssh command
+      uses: appleboy/ssh-action@master
+      if: env.SSH_PRIVATE_KEY && ! contains(github.event.action, 'noser') && env.MTARGET
+      with:
+        host: op.supes.top
+        username: root
+        key: ${{ env.SSH_PRIVATE_KEY }}
+        script: |
+          cd /www/wwwroot/op.supes.top/packages/${{ env.MTARGET }}/kmods/$(cat openwrt/include/kernel-5.10 | grep LINUX_KERNEL_HASH-5.10* | cut -f 2 -d - | cut -f 1 -d ' ')
+          opkg &
+
     - name: Upload firmware for artifact
       uses: actions/upload-artifact@main
       continue-on-error: true
       if: env.UPLOAD_FIRMWARE_FOR_ARTIFACT == 'true'
       with:
-        name: ${{ env.VERSION }} ${{matrix.target}}
-        path: ./firmware/
+        name: ${{ env.VERSION }}_${{matrix.target}}
+        path: |
+          ./firmware/
 
+    - name: Upload firmware to cowtransfer
+      if: env.UPLOAD_FIRMWARE_TO_COWTRANSFER == 'true'
+      continue-on-error: true
+      run: |
+        curl -fsSL git.io/file-transfer | sh
+        cowurl=$(./transfer cow --block 2621440 -s --no-progress ${FIRMWARE})
+        cowurl=$(echo $cowurl | grep -o -E "https[^ ]*")
+        echo "COWURL=$cowurl" >> $GITHUB_ENV
+        echo "Download Link: ${{ env.EMOJI }} $cowurl ${{ env.EMOJI }} 🚀"
+ 
+    - name: Upload firmware to WeTransfer
+      if: env.UPLOAD_FIRMWARE_TO_WETRANSFER == 'true' && ! contains(github.event.action, 'noup')
+      continue-on-error: true
+      run: |
+        curl -fsSL git.io/file-transfer | sh
+        wetrans=$(./transfer wet -s -p 16 --no-progress ${FIRMWARE})
+        wetrans=$(echo $wetrans | grep -o -E "https[^ ]*")
+        echo "WETRANS=$wetrans" >> $GITHUB_ENV
+        echo "Download Link: ${{ env.EMOJI }} $wetrans ${{ env.EMOJI }} 🚀"
+
+    - name: Create release
+      id: create_release
+      if: env.REPO_TOKEN && env.UPLOAD_FIRMWARE_FOR_RELEASE == 'true'
+      continue-on-error: true
+      run: |
+        echo -e "墙内加速下载 🚀:\n" >> release.txt
+        echo -e "[腾讯云] (https://op.supes.top/firmware/${{matrix.target}}/ ☁)\n" >> release.txt
+        [ ${{ env.WETRANS }} ] && echo -e "[WeTransfer] (${{ env.WETRANS }} 🗽)\n" >> release.txt
+        [ ${{ env.COWURL }} ] && echo -e "[奶牛上传] (${{ env.COWURL }} 🐮)\n" >> release.txt
+        [ ${{ env.NOTICE }} ] && echo -e "${{ env.NOTICE }}" >> release.txt || true
+
+    - name: Upload firmware for release
+      uses: softprops/action-gh-release@master
+      continue-on-error: true
+      if: env.REPO_TOKEN && env.UPLOAD_FIRMWARE_FOR_RELEASE == 'true'
+      env:
+        GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
+      with:
+        files: "${{ env.FIRMWARE }}/*"
+        name: ${{ env.date2 }} ${{matrix.target}} ${{ env.EMOJI }}
+        tag_name: ${{ env.date }}_${{matrix.target}}
+        body_path: release.txt
+      
+    - name: Set Up Docker Buildx
+      uses: docker/setup-buildx-action@master
+      if: env.DOCKER_ID && env.DOCKER_PASSWD
+
+    - name: Login To DockerHub
+      uses: docker/login-action@master
+      if: env.DOCKER_ID && env.DOCKER_PASSWD
+      with:
+        username: ${{ secrets.DOCKER_ID }}
+        password: ${{ secrets.DOCKER_PASSWD }}
+
+    - name: Build and push docker image
+      uses: docker/build-push-action@master
+      continue-on-error: true
+      if: env.DOCKER_ID && env.DOCKER_PASSWD && ! contains(github.event.action, 'noser')
+      with:
+        platforms: ${{ env.ARCH }}
+        file: Dockerfile
+        context: .
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_ID }}/openwrt-nginx:${{ matrix.target }}
+          ${{ env.DOCKERTAG }}
+    
     - name: WeChat notification
       continue-on-error: true
       if: env.SCKEY
